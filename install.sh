@@ -4,7 +4,11 @@ echo "Please enter main domain name"
 read DOMAIN
 echo "Please enter home dir, e.g /var/www/domain"
 read HOMEDIR
-
+echo $DOMAIN
+echo $HOMEDIR
+export DOMAINS="$DOMAIN,www.$DOMAIN"
+echo $DOMAINS
+read -p "Press [Enter] key to start backup..."
 ## Install repo's
 rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 rpm -Uvh  http://rpms.famillecollet.com/enterprise/remi-release-7.rpm
