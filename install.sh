@@ -6,9 +6,6 @@ echo "Please enter home dir, e.g /var/www/domain"
 read HOMEDIR
 echo $DOMAIN
 echo $HOMEDIR
-export DOMAINS="$DOMAIN,www.$DOMAIN"
-echo $DOMAINS
-read -p "Press [Enter] key to start backup..."
 ## Install repo's
 rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 rpm -Uvh  http://rpms.famillecollet.com/enterprise/remi-release-7.rpm
@@ -201,30 +198,27 @@ systemctl enable php-fpm
 
 mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak
 
+cd ../../conf
 
+cp default_temp.conf /etc/nginx/conf.d/default.conf
+
+sed -i -e 's/testdomain/'"$DOMAIN"'/g' /etc/nginx/conf.d/default.conf
+sed -i -e 's|testdir|'"$HOMEDIR"'|g' /etc/nginx/conf.d/default.conf
+
+mkdir $HOMEDIR
 
 export DOMAINS="$DOMAIN,www.$DOMAIN"
-mkdir $HOMEDIR
-sudo letsencrypt certonly -a webroot --webroot-path=$HOMEDIR -d $DOMAINS
+letsencrypt certonly -a webroot --webroot-path=$HOMEDIR -d $DOMAINS
 
 # test your configuration and reload
 nginx -t && systemctl start nginx
 
-touch /etc/crond.weekly/letsencrypt.sh
-chmod +x /etc/crond.weekly/letsencrypt.sh
-
-cat <<LE_RENEW > /etc/crond.weekly/letsencrypt.sh
-#!/bin/sh
-# This script renews all the Let's Encrypt certificates with a validity < 30 days
-
-if ! letsencrypt renew > /var/log/letsencrypt/renew.log 2>&1 ; then
-    echo Automated renewal failed:
-    cat /var/log/letsencrypt/renew.log
-    exit 1
-fi
-LE_RENEW
-
-/usr/sbin/nginx -t && /usr/sbin/nginx -s reload
+#############
+##
+##  Add Lets encrypt renew script see
+## https://news.ycombinator.com/item?id=11705731
+##
+#############
 
 sed -i -e 's/cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/' /etc/php.ini
 sed -i -e 's/user = apache/user = nginx/' /etc/php-fpm.d/www.conf
