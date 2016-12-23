@@ -77,7 +77,7 @@ export CFLAGS="-I/usr/local/include/ -L/usr/local/lib -Wl,-rpath,/usr/local/lib 
 export CXXFLAGS="-I/usr/local/include/ -L/usr/local/lib -Wl,-rpath,/usr/local/lib -lssl -lcrypto"
 
 ## enable httpd in selinux
-sed -i -e 's/SELINUX=disabled/SELINUX=enabled/' /etc/selinux/config
+sed -i -e 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
 semanage permissive -a httpd_t
 
 ## Start nginx
