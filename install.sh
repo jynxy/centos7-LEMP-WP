@@ -17,9 +17,7 @@ rpm -Uvh  http://rpms.famillecollet.com/enterprise/remi-release-7.rpm
 yum clean all
 yum -y update
 yum -y groupinstall "Development Tools"
-yum -y \
-install \
-wget \
+yum -y install \
 openssl-devel \
 libxml2-devel \
 libxslt-devel \
