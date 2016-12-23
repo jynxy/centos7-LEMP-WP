@@ -38,6 +38,8 @@ redis
 OPENSSL="openssl-1.1.0c"
 NGINX_VERSION="1.11.7-1"
 NJS_VERSION="1.11.7.0.1.6-1"
+NGHTTP2_VERSION=""
+CURL_VERSION=""
 
 rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-$NGINX_VERSION.el7.ngx.src.rpm
 rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-module-geoip-$NGINX_VERSION.el7.ngx.src.rpm
@@ -69,12 +71,12 @@ cd sources
 wget https://www.openssl.org/source/$OPENSSL.tar.gz
 tar zxf $OPENSSL.tar.gz
 cd $OPENSSL
-./Configure linux-x86_64 shared no-ssl2 no-ssl3 no-comp enable-ec_nistp_64_gcc_128 -Wl,--enable-new-dtags,-rpath,/usr/local/lib
+./Configure linux-x86_64 shared no-ssl2 no-ssl3 no-comp enable-ec_nistp_64_gcc_128 -Wl,--enable-new-dtags,-rpath,'$(LIBRPATH)'
 make -j 4
 make install
 
-export CFLAGS="-I/usr/local/include/ -L/usr/local/lib -Wl,-rpath,/usr/local/lib -lssl -lcrypto"
-export CXXFLAGS="-I/usr/local/include/ -L/usr/local/lib -Wl,-rpath,/usr/local/lib -lssl -lcrypto"
+export CFLAGS="-I/usr/local/include/ -L/usr/local/lib64 -Wl,-rpath,/usr/local/lib64 -lssl -lcrypto"
+export CXXFLAGS="-I/usr/local/include/ -L/usr/local/lib64 -Wl,-rpath,/usr/local/lib64 -lssl -lcrypto"
 
 ## enable httpd in selinux
 sed -i -e 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
@@ -83,8 +85,6 @@ semanage permissive -a httpd_t
 ## Start nginx
 systemctl enable nginx
 systemctl start nginx
-
-cd ..
 
 systemctl enable firewalld
 systemctl start firewalld
@@ -97,7 +97,7 @@ cd ..
 wget https://github.com/nghttp2/nghttp2/releases/download/v1.17.0/nghttp2-1.17.0.tar.gz
 tar zxf nghttp2-1.17.0.tar.gz
 cd nghttp2-1.17.0.tar.gz
-autoreconf -i
+autoreconf -i --force
 automake
 autoconf 
 ./configure 
@@ -105,7 +105,7 @@ make
 make install
 
 ## Update Curl
-cd..
+cd ..
 wget https://curl.haxx.se/download/curl-7.51.0.tar.gz
 tar xzf curl-7.51.0.tar.gz
 cd curl-7.51.0
@@ -201,37 +201,7 @@ systemctl enable php-fpm
 
 mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak
 
-cat <<NGINX_CONF_TEMP > /etc/nginx/conf.d/default.conf
-server {
-    listen 80;
-    listen 443 ssl http2;
-    server_name $DOMAIN www.$DOMAIN;
-    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-    ssl_ciphers EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
-    ssl_prefer_server_ciphers On;
-#    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-#    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-#    ssl_trusted_certificate /etc/letsencrypt/live/$DOMAIN/chain.pem;
-    ssl_session_cache shared:SSL:128m;
-    add_header Strict-Transport-Security "max-age=31557600; includeSubDomains";
-    ssl_stapling on;
-    ssl_stapling_verify on;
-    # Your favorite resolver may be used instead of the Google one below
-    resolver 8.8.8.8;
-    root $HOMEDIR;
-    index index.html;
 
-    location '/.well-known/acme-challenge' {
-        root        $HOMEDIR;
-    }
-
-    location / {
-        if ($scheme = http) {
-            return 301 https://$server_name$request_uri;
-        }
-    }
-}
-NGINX_CONF_TEMP
 
 export DOMAINS="$DOMAIN,www.$DOMAIN"
 mkdir $HOMEDIR
