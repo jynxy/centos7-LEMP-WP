@@ -266,7 +266,10 @@ cd goaccess-1.1.1/
 make
 make install
 
-#nano /usr/local/etc/goaccess.conf
+sed -i -e 's|#time-format %f|time-format %T|g' /usr/local/etc/goaccess.conf
+sed -i -e 's|#date-format %d/%b/%Y|date-format %d/%b/%Y|g' /usr/local/etc/goaccess.conf
+echo 'log-format %h %^[%d:%t %^] "%r" %s %b "%R" "%u"' >> /usr/local/etc/goaccess.conf
+
 #goaccess -f /var/log/nginx/access.log -a > report.html
 
 
