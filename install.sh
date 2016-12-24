@@ -29,7 +29,10 @@ firewalld \
 policycoreutils \
 policycoreutils-python \
 letsencrypt \
-redis
+redis \
+tokyocabinet-devel \
+ncurses-devel \
+bzip2-devel
 
 ## Define Version's
 OPENSSL="openssl-1.1.0c"
@@ -37,6 +40,7 @@ NGINX_VERSION="1.11.7-1"
 NJS_VERSION="1.11.7.0.1.6-1"
 NGHTTP2_VERSION=""
 CURL_VERSION=""
+GOACCESS_VERSION=""
 
 rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-$NGINX_VERSION.el7.ngx.src.rpm
 rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-module-geoip-$NGINX_VERSION.el7.ngx.src.rpm
@@ -224,108 +228,20 @@ sed -i -e 's/cgi.fix_pathinfo=1/cgi.fix_pathinfo=0/' /etc/php.ini
 sed -i -e 's/user = apache/user = nginx/' /etc/php-fpm.d/www.conf
 sed -i -e 's/group = apache/group = nginx/' /etc/php-fpm.d/www.conf
 sed -i -e 's/;listen.mode = 0660/listen.mode = 0666/' /etc/php-fpm.d/www.conf
-
-cat <<NGINX_CONF > /etc/nginx/conf.d/default.conf
-server {
-    listen 80;
-    listen [::]:80;
-    server_name $DOMAIN www.$DOMAIN;
-    return 301 https://$server_name$request_uri;
-}
- 
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name $DOMAIN www.$DOMAIN;
-
-    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-    ssl_ciphers EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
-    ssl_prefer_server_ciphers On;
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    ssl_trusted_certificate /etc/letsencrypt/live/$DOMAIN/chain.pem;
-    ssl_session_cache shared:SSL:128m;
-    add_header Strict-Transport-Security "max-age=31557600; includeSubDomains";
-    add_header X-Frame-Options SAMEORIGIN;
-    add_header X-Content-Type-Options nosniff;
-    ssl_stapling on;
-    ssl_stapling_verify on;
-    ssl_dhparam /etc/ssl/certs/dhparam.pem;
-
-    # Your favorite resolver may be used instead of the Google one below
-    resolver 8.8.8.8 8.8.4.4 valid=300s;
-    root $HOMEDIR;
-    index index.php index.html;
-
-    location '/.well-known/acme-challenge'
-    {
-        root $HOMEDIR;
-    }
-
-    location /
-    {
-        if ($scheme = http)
-        {
-            return 301 https://$server_name$request_uri;
-        }
-    }
-
-    location ~ .php$ {
-       # zero-day exploit defense.
-        try_files $uri =404;
-
-        fastcgi_intercept_errors on;
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    #deny all .ht**** files
-    location ~ /\.ht
-    {
-        deny all;
-    }
-
-    # allow CORS for fonts
-    location ~* \\.(ttf|ttc|otf|eot|woff2?|font.css|css|svg)\$ {
-        add_header Access-Control-Allow-Origin *;
-    }
-
-    location ~* (readme|changelog)\\.txt\$ {
-        return 444;
-    }
-
-    # don't show this as it can leak info
-    location ~* /(\\.|(wp-config|xmlrpc)\\.php|(readme|license|changelog)\\.(html|txt)) {
-        return 444;
-    }
-
-    # no PHP execution in uploads/files
-    location ~* /(?:uploads|files)/.*\\.php\$ {
-        deny all;
-    }
-
-    # hide contents of sensitive files
-    location ~* \\.(conf|engine|inc|info|install|make|module|profile|test|po|sh|.*sql|theme|tpl(\\.php)?|xtmpl)\$|^(\\..*|Entries.*|Repository|Root|Tag|Template)\$|\\.php_ {
-        return 444;
-    }
-
-    # don't allow other executable file types
-    location ~* \\.(pl|cgi|py|sh|lua)\$ {
-        return 444;
-    }
-}
-NGINX_CONF
-
 chown -R nginx.nginx /var/log/php-fpm
 mkdir -p /var/lib/php/session && mkdir -p /var/lib/php/wsdlcache && mkdir -p /var/lib/php/opcache
 chown -R nginx.nginx /var/lib/php/*
-sed -i -e 's/user = apache/user = nginx/' /etc/php-fpm.d/www.conf
-sed -i -e 's/group = apache/group = nginx/' /etc/php-fpm.d/www.conf
+mkdir /etc/nginx/cache
+
+rm -f /etc/nginx/conf.d/default.conf
+cp default.conf /etc/nginx/conf.d/default.conf
+
+sed -i -e 's/testdomain/'"$DOMAIN"'/g' /etc/nginx/conf.d/default.conf
+sed -i -e 's|testdir|'"$HOMEDIR"'|g' /etc/nginx/conf.d/default.conf
 
 ## install mariadb 10.0
-cat <<REPO > /etc/yum.repos.d/mariadb.repo
+
+cat <<MARIA_REPO > /etc/yum.repos.d/mariadb.repo
 ## MariaDB 10.0 CentOS repository list - created 2016-12-04 20:46 UTC
 ## http://downloads.mariadb.org/mariadb/repositories/
 [mariadb]
@@ -334,16 +250,24 @@ baseurl = http://yum.mariadb.org/10.0/centos7-amd64
 gpgkey=https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
 gpgcheck=1
 enable=1
-REPO
+MARIA_REPO
 
+yum install -y MariaDB-server MariaDB-client
 
-mkdir /usr/share/nginx/cache
+systemctl enable mysql
+systemctl start mysql
+mysql_secure_installation
 
+wget http://tar.goaccess.io/goaccess-1.1.1.tar.gz
+tar -xzvf goaccess-1.1.1.tar.gz
+cd goaccess-1.1.1/
 
+./configure --enable-geoip --enable-utf8 --enable-tcb=btree --with-openssl=/usr/local/ssl/
+make
+make install
 
-
-
-
+#nano /usr/local/etc/goaccess.conf
+#goaccess -f /var/log/nginx/access.log -a > report.html
 
 
 
