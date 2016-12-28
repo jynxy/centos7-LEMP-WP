@@ -41,6 +41,17 @@ NJS_VERSION="1.11.7.0.1.6-1"
 NGHTTP2_VERSION=""
 CURL_VERSION=""
 GOACCESS_VERSION=""
+MODSEC_VERSION="2.9.1"
+
+mkdir sources
+cd sources
+
+## Mod_Security
+wget https://www.modsecurity.org/tarball/2.9.1/modsecurity-$MODSEC_VERSION.tar.gz
+tar -zxvf modsecurity-$MODSEC_VERSION.tar.gz
+cd modsecurity-$MODSEC_VERSION
+./configure --enable-standalone-module
+make
 
 rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-$NGINX_VERSION.el7.ngx.src.rpm
 rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-module-geoip-$NGINX_VERSION.el7.ngx.src.rpm
@@ -50,7 +61,7 @@ rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-module-perl-$NG
 rpm -ivh http://nginx.org/packages/mainline/centos/7/SRPMS/nginx-module-xslt-$NGINX_VERSION.el7.ngx.src.rpm
 
 sed -i "/Source12: .*/a Source100: https://www.openssl.org/source/$OPENSSL.tar.gz" /root/rpmbuild/SPECS/nginx.spec
-sed -i "s|--with-http_ssl_module|--with-http_ssl_module --with-openssl=$OPENSSL|g" /root/rpmbuild/SPECS/nginx.spec
+sed -i "s|--with-http_ssl_module|--with-http_ssl_module --with-openssl=$OPENSSL --add-module=/root/sources/modsecurity-$MODSEC_VERSION/nginx/modsecurity|g" /root/rpmbuild/SPECS/nginx.spec
 sed -i '/%setup -q/a tar zxf %{SOURCE100}' /root/rpmbuild/SPECS/nginx.spec
 sed -i '/.*Requires: openssl.*/d' /root/rpmbuild/SPECS/nginx.spec
 
@@ -65,8 +76,7 @@ rpmbuild -ba /root/rpmbuild/SPECS/nginx-module-xslt.spec
 
 rpm -Uvh /root/rpmbuild/RPMS/x86_64/nginx-$NGINX_VERSION.el7.centos.ngx.x86_64.rpm
 
-mkdir sources
-cd sources
+
 
 ## Install and update SSL
 wget https://www.openssl.org/source/$OPENSSL.tar.gz
